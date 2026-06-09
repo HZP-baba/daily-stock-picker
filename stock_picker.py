@@ -96,7 +96,7 @@ def technical_select_stocks():
         list_status='L', 
         fields='ts_code,symbol,name,industry,list_date'
     )
-    stock_list = stock_list[~stock_list['name'].str.contains('ST|*ST|退')]
+    stock_list = stock_list[~stock_list['name'].str.contains(r'ST|\*ST|退', na=False)]
     
     # 处理股票（为了速度，只处理最近30天有交易的前500只）
     for _, stock in stock_list.head(500).iterrows():
