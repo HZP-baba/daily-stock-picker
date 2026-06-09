@@ -6,9 +6,48 @@ import json
 import os
 from datetime import datetime, timedelta
 
-# 从环境变量获取Tushare token（GitHub Secrets自动注入）
+# 从环境变量获取Tushare token
 ts.set_token(os.environ.get('TUSHARE_TOKEN'))
 pro = ts.pro_api()
+
+# -------------------------- 核心优化：股票列表缓存（每周更新1次） --------------------------
+CACHE_FILE = 'stock_list_cache.json'
+CACHE_EXPIRE_DAYS = 7  # 缓存有效期7天
+
+def get_cached_stock_list():
+    """获取缓存的股票列表，如果缓存过期则重新获取"""
+    # 检查缓存文件是否存在且未过期
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                cache_data = json.load(f)
+            
+            cache_time = datetime.fromisoformat(cache_data['cache_time'])
+            if datetime.now() - cache_time < timedelta(days=CACHE_EXPIRE_DAYS):
+                print("使用缓存的股票列表")
+                return pd.DataFrame(cache_data['stocks'])
+        except Exception as e:
+            print(f"读取缓存失败: {e}")
+    
+    # 缓存过期或不存在，重新获取
+    print("重新获取股票列表（每周仅1次）")
+    stock_list = pro.stock_basic(
+        exchange='', 
+        list_status='L', 
+        fields='ts_code,symbol,name,industry,list_date'
+    )
+    # 过滤ST和退市股
+    stock_list = stock_list[~stock_list['name'].str.contains(r'ST|\*ST|退', na=False)]
+    
+    # 保存到缓存
+    cache_data = {
+        'cache_time': datetime.now().isoformat(),
+        'stocks': stock_list.to_dict('records')
+    }
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cache_data, f, ensure_ascii=False, indent=2)
+    
+    return stock_list
 
 # -------------------------- 消息面选股：关键词匹配 --------------------------
 KEYWORD_MAP = {
@@ -64,8 +103,8 @@ def match_news_stocks(news_list):
                             fields='ts_code,circ_mv,pe'
                         )
                         df = df.merge(daily_basic, on='ts_code')
-                        # 筛选流通市值50-500亿，市盈率<100
-                        df = df[(df['circ_mv'] >= 500000) & (df['circ_mv'] <= 5000000) & (df['pe'] < 100)]
+                        # 筛选流通市值50-500亿，市盈率>0且<100
+                        df = df[(df['circ_mv'] >= 500000) & (df['circ_mv'] <= 5000000) & (df['pe'] > 0) & (df['pe'] < 100)]
                         
                         if len(df) > 0 and df.iloc[0]['ts_code'] not in used_codes:
                             stock = df.iloc[0]
@@ -90,16 +129,11 @@ def technical_select_stocks():
     """技术面选股，选出3只符合突破条件的股票"""
     selected_stocks = []
     
-    # 获取A股所有股票列表（排除ST和退市股）
-    stock_list = pro.stock_basic(
-        exchange='', 
-        list_status='L', 
-        fields='ts_code,symbol,name,industry,list_date'
-    )
-    stock_list = stock_list[~stock_list['name'].str.contains(r'ST|\*ST|退', na=False)]
+    # 使用缓存的股票列表（每周仅更新1次）
+    stock_list = get_cached_stock_list()
     
-    # 处理股票（为了速度，只处理最近30天有交易的前500只）
-    for _, stock in stock_list.head(500).iterrows():
+    # 只处理前300只股票（足够选出好股，进一步减少接口调用）
+    for _, stock in stock_list.head(300).iterrows():
         ts_code = stock['ts_code']
         try:
             # 获取最近90个交易日数据
