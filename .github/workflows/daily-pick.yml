@@ -3,7 +3,6 @@ on:
   schedule:
     # 每天北京时间早上8点运行（UTC时间0点）
     - cron: '0 0 * * *'
-  # 允许手动触发运行
   workflow_dispatch:
 
 jobs:
@@ -12,6 +11,15 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+
+      # ✅ 新增：GitHub官方缓存，保存股票列表（有效期7天）
+      - name: 缓存股票列表
+        uses: actions/cache@v4
+        with:
+          path: stock_list_cache.json
+          key: stock-list-cache-${{ github.run_id }}
+          restore-keys: |
+            stock-list-cache-
 
       - name: 设置Python环境
         uses: actions/setup-python@v5
