@@ -196,7 +196,52 @@ def technical_select_stocks():
     # 按量比排序，取前3只
     selected_stocks = sorted(selected_stocks, key=lambda x: x['volume_ratio'], reverse=True)[:3]
     return selected_stocks
-
+# -------------------------- 微信自动推送 --------------------------
+def send_wechat_message(news_stocks, tech_stocks):
+    """发送选股结果到微信"""
+    sendkey = os.environ.get('SC_SENDKEY')
+    if not sendkey:
+        print("未配置Server酱SendKey，跳过微信推送")
+        return
+    
+    # 构造推送内容
+    title = f"每日选股结果 - {datetime.now().strftime('%Y-%m-%d')}"
+    
+    content = "## 📰 消息面精选（3只）\n\n"
+    if news_stocks:
+        for stock in news_stocks:
+            content += f"- **{stock['name']}** ({stock['ts_code']})\n"
+            content += f"  行业：{stock['industry']}\n"
+            content += f"  理由：{stock['reason']}\n\n"
+    else:
+        content += "暂无符合条件的股票\n\n"
+    
+    content += "## 📈 技术面突破（3只）\n\n"
+    if tech_stocks:
+        for stock in tech_stocks:
+            content += f"- **{stock['name']}** ({stock['ts_code']})\n"
+            content += f"  收盘价：{stock['close']}元 | 量比：{stock['volume_ratio']}\n"
+            content += f"  月涨幅：{stock['month_gain']}% | 趋势斜率：{stock['slope']}%\n\n"
+    else:
+        content += "暂无符合条件的股票\n\n"
+    
+    content += "---\n"
+    content += "⚠️ **风险提示**：本结果仅为技术学习参考，不构成任何投资建议。股市有风险，投资需谨慎。"
+    
+    # 发送推送
+    try:
+        url = f"https://sctapi.ftqq.com/{sendkey}.send"
+        data = {
+            'title': title,
+            'desp': content
+        }
+        response = requests.post(url, data=data, timeout=10)
+        if response.status_code == 200:
+            print("微信推送成功！")
+        else:
+            print(f"微信推送失败：{response.text}")
+    except Exception as e:
+        print(f"微信推送异常：{e}")
 # -------------------------- 主函数 --------------------------
 if __name__ == '__main__':
     print("开始选股...")
@@ -220,3 +265,5 @@ if __name__ == '__main__':
     print("选股完成！")
     print(f"消息面股票：{[s['name'] for s in news_stocks]}")
     print(f"技术面股票：{[s['name'] for s in tech_stocks]}")
+        # 发送微信推送（新增这一行）
+    send_wechat_message(news_stocks, tech_stocks)
