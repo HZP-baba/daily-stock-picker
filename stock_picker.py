@@ -196,52 +196,80 @@ def technical_select_stocks():
     # 按量比排序，取前3只
     selected_stocks = sorted(selected_stocks, key=lambda x: x['volume_ratio'], reverse=True)[:3]
     return selected_stocks
-# -------------------------- 微信自动推送 --------------------------
+# -------------------------- PushPlus微信自动推送（会员版） --------------------------
 def send_wechat_message(news_stocks, tech_stocks):
-    """发送选股结果到微信"""
-    sendkey = os.environ.get('SC_SENDKEY')
-    if not sendkey:
-        print("未配置Server酱SendKey，跳过微信推送")
+    """使用PushPlus发送选股结果到微信（会员版，极速稳定）"""
+    token = os.environ.get('PUSHPLUS_TOKEN')
+    if not token:
+        print("未配置PushPlus Token，跳过微信推送")
         return
     
-    # 构造推送内容
+    # 构造推送标题
     title = f"每日选股结果 - {datetime.now().strftime('%Y-%m-%d')}"
     
-    content = "## 📰 消息面精选（3只）\n\n"
+    # 构造推送内容（支持完整Markdown，会员版无字数限制）
+    content = """
+## 📰 消息面精选（3只）
+"""
+    
     if news_stocks:
-        for stock in news_stocks:
-            content += f"- **{stock['name']}** ({stock['ts_code']})\n"
-            content += f"  行业：{stock['industry']}\n"
-            content += f"  理由：{stock['reason']}\n\n"
+        for i, stock in enumerate(news_stocks, 1):
+            content += f"""
+### {i}. {stock['name']} `{stock['ts_code']}`
+- 🏭 所属行业：{stock['industry']}
+- 🎯 驱动逻辑：{stock['reason']}
+"""
     else:
-        content += "暂无符合条件的股票\n\n"
+        content += "\n暂无符合条件的消息面股票\n"
     
-    content += "## 📈 技术面突破（3只）\n\n"
+    content += """
+---
+
+## 📈 技术面突破（3只）
+"""
+    
     if tech_stocks:
-        for stock in tech_stocks:
-            content += f"- **{stock['name']}** ({stock['ts_code']})\n"
-            content += f"  收盘价：{stock['close']}元 | 量比：{stock['volume_ratio']}\n"
-            content += f"  月涨幅：{stock['month_gain']}% | 趋势斜率：{stock['slope']}%\n\n"
+        for i, stock in enumerate(tech_stocks, 1):
+            content += f"""
+### {i}. {stock['name']} `{stock['ts_code']}`
+- 💰 昨日收盘价：{stock['close']}元
+- 📊 突破量比：{stock['volume_ratio']}倍
+- 📈 近一月涨幅：{stock['month_gain']}%
+- 📐 趋势斜率：{stock['slope']}%
+- 🏭 所属行业：{stock['industry']}
+"""
     else:
-        content += "暂无符合条件的股票\n\n"
+        content += "\n暂无符合条件的技术面股票\n"
     
-    content += "---\n"
-    content += "⚠️ **风险提示**：本结果仅为技术学习参考，不构成任何投资建议。股市有风险，投资需谨慎。"
+    content += """
+---
+
+## ⚠️ 重要风险提示
+本结果仅为**技术学习研究工具**，不构成任何投资建议。
+股票市场存在极高风险，过往表现不代表未来收益。
+所有投资决策及盈亏，均由您自行承担。
+"""
     
-    # 发送推送
+    # 发送推送（PushPlus会员版接口）
     try:
-        url = f"https://sctapi.ftqq.com/{sendkey}.send"
+        url = "https://www.pushplus.plus/send"
         data = {
-            'title': title,
-            'desp': content
+            "token": token,
+            "title": title,
+            "content": content,
+            "template": "markdown",  # 使用Markdown模板，排版更美观
+            "channel": "wechat"      # 指定推送到微信
         }
-        response = requests.post(url, data=data, timeout=10)
-        if response.status_code == 200:
-            print("微信推送成功！")
+        response = requests.post(url, json=data, timeout=10)
+        result = response.json()
+        
+        if result["code"] == 200:
+            print(f"PushPlus推送成功！消息ID：{result['data']}")
         else:
-            print(f"微信推送失败：{response.text}")
+            print(f"PushPlus推送失败：{result['msg']}")
+            
     except Exception as e:
-        print(f"微信推送异常：{e}")
+        print(f"PushPlus推送异常：{e}")
 # -------------------------- 主函数 --------------------------
 if __name__ == '__main__':
     print("开始选股...")
