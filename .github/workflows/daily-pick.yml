@@ -29,6 +29,7 @@ jobs:
       - name: 运行选股程序
         env:
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          SC_SENDKEY: ${{ secrets.SC_SENDKEY }}  # 新增这一行
         run: python stock_picker.py
 
       - name: 提交结果到仓库
