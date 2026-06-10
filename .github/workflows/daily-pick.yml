@@ -3,7 +3,7 @@ on:
   schedule:
     # 每天北京时间早上8点运行（UTC时间0点）
     - cron: '0 0 * * *'
-  # 允许手动触发运行（方便测试）
+  # 允许手动触发运行
   workflow_dispatch:
 
 jobs:
@@ -12,9 +12,6 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
 
       - name: 设置Python环境
         uses: actions/setup-python@v5
@@ -26,16 +23,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install tushare pandas numpy requests
 
-      - name: 运行选股程序
+      - name: 运行选股程序并发送微信推送
         env:
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}  # 替换成这个
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         run: python stock_picker.py
-
-      - name: 提交结果到仓库
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add result.json stock_list_cache.json
-          git commit -m "更新选股结果: $(date +'%Y-%m-%d')"
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
